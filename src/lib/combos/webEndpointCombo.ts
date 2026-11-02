@@ -21,6 +21,7 @@ interface WebComboOptions {
   allowedConnections: string[] | null;
   settings?: Record<string, unknown>;
   dispatch: (
+    body: Record<string, unknown>,
     provider: string,
     allowedConnections: string[] | null,
     target: ResolvedComboTarget
@@ -51,7 +52,7 @@ export async function runWebEndpointCombo(options: WebComboOptions): Promise<Res
       signal: options.request.signal,
       apiKeyAllowedConnections: options.allowedConnections,
       isModelAvailable: createComboTargetKeyGate(options.policy, options.name),
-      handleSingleModel: async (_body, model, target) => {
+      handleSingleModel: async (routedBody, model, target) => {
         if (options.request.signal.aborted) return errorResponse(499, "Request aborted");
         if (!target || !("modelStr" in target))
           return errorResponse(400, "Invalid web combo target");
@@ -60,6 +61,7 @@ export async function runWebEndpointCombo(options: WebComboOptions): Promise<Res
           pinnedConnectionIds(target)
         );
         return options.dispatch(
+          routedBody,
           targetProvider(model, target.providerId || target.provider),
           scope,
           target

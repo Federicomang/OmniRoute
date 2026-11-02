@@ -36,6 +36,10 @@ import {
 } from "@omniroute/open-sse/services/imageCombo.ts";
 import { projectComboForEndpoint } from "@/lib/combos/endpointCapabilities";
 import { orderCapabilityTargets } from "@/lib/combos/capabilityTargetOrder";
+import {
+  applyComboTargetRequestConfig,
+  type ComboTargetRequestConfig,
+} from "@omniroute/open-sse/services/targetRequestConfig.ts";
 import { isAllRateLimitedCredentials } from "@/app/api/v1/_shared/rateLimit";
 import {
   runImageRequestWithAccounting,
@@ -344,6 +348,7 @@ interface EditComboTarget {
   providerConfig: ReturnType<typeof getImageProvider> | null;
   /** Credential/connection lookup key (built-in provider id, or custom node id). */
   credKey: string;
+  requestConfig?: ComboTargetRequestConfig;
 }
 
 /**
@@ -604,6 +609,7 @@ async function executeImageEditCombo(comboName: string, ctx: ImageEditContext): 
       parsed,
       providerConfig,
       credKey: capability.credKey,
+      requestConfig: t.requestConfig,
     });
   }
 
@@ -639,7 +645,24 @@ async function executeImageEditCombo(comboName: string, ctx: ImageEditContext): 
           credentials,
           projected.combo.strategy || "priority"
         ),
-        () => dispatchImageEditTarget(target, credentials, ctx)
+        () => {
+          const configured = applyComboTargetRequestConfig(
+            "image-edits",
+            {
+              size: ctx.size ?? undefined,
+              response_format: ctx.responseFormat ?? undefined,
+            },
+            target.requestConfig
+          );
+          return dispatchImageEditTarget(target, credentials, {
+            ...ctx,
+            size: typeof configured.size === "string" ? configured.size : ctx.size,
+            responseFormat:
+              typeof configured.response_format === "string"
+                ? configured.response_format
+                : ctx.responseFormat,
+          });
+        }
       ),
     onSuccess: async (credentials) => {
       await clearRecoveredProviderState(credentials as never);

@@ -82,6 +82,33 @@ function withModel(formData: FormData, modelStr: string): FormData {
   return next;
 }
 
+const TRANSCRIPTION_CONFIG_FIELDS = ["language", "response_format", "temperature"] as const;
+
+function transcriptionComboBody(formData: FormData, model: string): Record<string, unknown> {
+  const body: Record<string, unknown> = { model };
+  for (const field of TRANSCRIPTION_CONFIG_FIELDS) {
+    const value = formData.get(field);
+    if (typeof value === "string" && value.length > 0) {
+      body[field] =
+        field === "temperature" && Number.isFinite(Number(value)) ? Number(value) : value;
+    }
+  }
+  return body;
+}
+
+function withTranscriptionConfig(
+  formData: FormData,
+  model: string,
+  configuredBody: Record<string, unknown>
+): FormData {
+  const next = withModel(formData, model);
+  for (const field of TRANSCRIPTION_CONFIG_FIELDS) {
+    const value = configuredBody[field];
+    if (value !== undefined && value !== null) next.set(field, String(value));
+  }
+  return next;
+}
+
 /**
  * Handle CORS preflight
  */
@@ -355,11 +382,11 @@ export async function POST(request) {
 
         return handleComboChat({
           endpointCapability: "audio-transcriptions",
-          body: { model: modelStr } as any,
+          body: transcriptionComboBody(formData, modelStr) as any,
           combo: combo as any,
-          handleSingleModel: async (_reqBody: any, targetModelStr: string) =>
+          handleSingleModel: async (reqBody: any, targetModelStr: string) =>
             transcribeWithModel(
-              withModel(formData, targetModelStr),
+              withTranscriptionConfig(formData, targetModelStr, reqBody),
               targetModelStr,
               startTime,
               apiKeyId,

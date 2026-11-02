@@ -49,6 +49,7 @@ import { errorResponse } from "@omniroute/open-sse/utils/error.ts";
 import * as logger from "@/sse/utils/logger";
 import { projectComboForEndpoint } from "../../src/lib/combos/endpointCapabilities.ts";
 import { orderCapabilityTargets } from "../../src/lib/combos/capabilityTargetOrder.ts";
+import { applyComboTargetRequestConfig } from "./targetRequestConfig.ts";
 
 /**
  * Execute a full combo strategy for a video generation request.
@@ -99,12 +100,18 @@ export async function executeVideoCombo(
     modelStr: string;
     weight?: number;
     resolved: VideoModelTarget;
+    requestConfig?: (typeof targets)[number]["requestConfig"];
   }> = [];
   for (const t of targets) {
     if (!t.modelStr) continue;
     const resolved = await resolveVideoModelTarget(t.modelStr);
     if (resolved.provider) {
-      videoTargets.push({ modelStr: t.modelStr, weight: t.weight, resolved });
+      videoTargets.push({
+        modelStr: t.modelStr,
+        weight: t.weight,
+        resolved,
+        requestConfig: t.requestConfig,
+      });
     }
   }
 
@@ -139,7 +146,11 @@ export async function executeVideoCombo(
     resolveFirstSuccess = resolve;
   });
 
-  const runTarget = async (modelStr: string, resolved: VideoModelTarget): Promise<void> => {
+  const runTarget = async (
+    modelStr: string,
+    resolved: VideoModelTarget,
+    requestConfig?: (typeof targets)[number]["requestConfig"]
+  ): Promise<void> => {
     try {
       if (signal.aborted) return;
       const { provider: targetProvider, model: targetModel, isCustomModel } = resolved;
@@ -253,7 +264,10 @@ export async function executeVideoCombo(
       }
 
       const result: MediaGenerationResultLike = await handleVideoGeneration({
-        body: { ...body, model: modelStr },
+        body: {
+          ...applyComboTargetRequestConfig("videos", body, requestConfig),
+          model: modelStr,
+        },
         credentials,
         log,
         // Route-injected sink, so a job-preset result is servable exactly like the
@@ -319,11 +333,13 @@ export async function executeVideoCombo(
     targets: videoTargets,
   });
   if (strategy === "priority") {
-    const tasks = orderedTargets.map(({ modelStr, resolved }) => runTarget(modelStr, resolved));
+    const tasks = orderedTargets.map(({ modelStr, resolved, requestConfig }) =>
+      runTarget(modelStr, resolved, requestConfig)
+    );
     await Promise.race([firstSuccess, Promise.allSettled(tasks)]);
   } else {
-    for (const { modelStr, resolved } of orderedTargets) {
-      await runTarget(modelStr, resolved);
+    for (const { modelStr, resolved, requestConfig } of orderedTargets) {
+      await runTarget(modelStr, resolved, requestConfig);
       if (selectedResult) break;
     }
   }

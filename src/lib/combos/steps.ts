@@ -5,6 +5,11 @@
  * @changes
  * - [2026-07-25] [Composer] - Preserve provider-wildcard steps during combo normalization
  */
+import {
+  normalizeComboTargetRequestConfig,
+  type ComboTargetRequestConfig,
+} from "@omniroute/open-sse/services/targetRequestConfig.ts";
+
 type JsonRecord = Record<string, unknown>;
 
 export const COMBO_SCHEMA_VERSION = 2;
@@ -26,6 +31,7 @@ export interface ComboModelStep {
   prompt?: string | null;
   tags?: string[];
   fallbackOnlyOnQuotaExhaustion?: boolean;
+  requestConfig?: ComboTargetRequestConfig;
 }
 
 export interface ComboRefStep {
@@ -321,6 +327,7 @@ export function normalizeComboStep(
   const label = toTrimmedString(value.label);
   const prompt = toTrimmedString(value.prompt);
   const fallbackOnlyOnQuotaExhaustion = value.fallbackOnlyOnQuotaExhaustion === true;
+  const requestConfig = normalizeComboTargetRequestConfig(value.requestConfig);
 
   if (value.kind === "combo-ref") {
     const comboRefName = toTrimmedString(value.comboName);
@@ -445,6 +452,7 @@ export function normalizeComboStep(
     ...(tags && tags.length > 0 ? { tags } : {}),
     ...(allowedConnectionIds && allowedConnectionIds.length > 0 ? { allowedConnectionIds } : {}),
     ...(fallbackOnlyOnQuotaExhaustion ? { fallbackOnlyOnQuotaExhaustion: true } : {}),
+    ...(requestConfig ? { requestConfig } : {}),
   };
 }
 

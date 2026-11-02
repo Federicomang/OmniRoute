@@ -37,6 +37,7 @@ import {
 } from "./mediaComboFallback.ts";
 import { projectComboForEndpoint } from "../../src/lib/combos/endpointCapabilities.ts";
 import { orderCapabilityTargets } from "../../src/lib/combos/capabilityTargetOrder.ts";
+import { applyComboTargetRequestConfig } from "./targetRequestConfig.ts";
 
 /**
  * Caller-facing shape of handleImageGeneration(). The handler is untyped and
@@ -320,7 +321,10 @@ export async function executeImageCombo(
         },
         () =>
           handleImageGeneration({
-            body: { ...body, model: target.modelStr },
+            body: {
+              ...applyComboTargetRequestConfig("images", body, target.requestConfig),
+              model: target.modelStr,
+            },
             credentials,
             log,
             signal: auth.request?.signal || null,

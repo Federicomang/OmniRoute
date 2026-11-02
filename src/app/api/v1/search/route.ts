@@ -186,8 +186,12 @@ async function postHandler(request: Request, context: unknown) {
       policy,
       allowedConnections,
       settings,
-      dispatch: (provider, scopedConnections) =>
-        executeSearchBody({ ...body, model: undefined, provider }, policy, scopedConnections),
+      dispatch: (routedBody, provider, scopedConnections) =>
+        executeSearchBody(
+          { ...routedBody, model: undefined, provider } as z.infer<typeof v1SearchSchema>,
+          policy,
+          scopedConnections
+        ),
     });
   }
   return executeSearchBody(body, policy, allowedConnections);

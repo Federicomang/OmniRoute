@@ -46,10 +46,12 @@ export async function POST(request: Request) {
               errorResponse(400, "The native /v1/music endpoint requires an ElevenLabs target")
             );
           }
+          const configuredBody = { ...targetBody };
+          delete configuredBody.model;
           return proxyElevenLabsRequest(
             request,
             "/music",
-            { method: "POST", body: JSON.stringify({ ...parsed.data, model_id: model }) },
+            { method: "POST", body: JSON.stringify({ ...configuredBody, model_id: model }) },
             {
               model: target,
               contentType: "application/json",

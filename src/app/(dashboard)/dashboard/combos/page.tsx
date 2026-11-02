@@ -104,6 +104,11 @@ import {
 } from "@/lib/combos/comboSort";
 import type { ComboStep } from "@/lib/combos/steps";
 import {
+  COMBO_TARGET_REQUEST_FIELDS,
+  type ComboTargetRequestConfig,
+  type ComboTargetRequestValue,
+} from "@omniroute/open-sse/services/targetRequestConfig.ts";
+import {
   filterCombosByStrategyCategory,
   getStrategyCategory,
   isIntelligentStrategy,
@@ -718,6 +723,150 @@ function normalizeModelEntry(entry) {
     model: entry.model,
     weight: entry.weight || 0,
   };
+}
+
+const NUMERIC_TARGET_REQUEST_FIELDS = new Set([
+  "temperature",
+  "top_p",
+  "max_tokens",
+  "max_completion_tokens",
+  "seed",
+  "max_results",
+  "days",
+  "depth",
+  "timeout_ms",
+  "dimensions",
+  "top_n",
+  "n",
+  "duration",
+  "duration_seconds",
+  "music_length_ms",
+  "fps",
+  "sample_rate",
+  "speed",
+  "prompt_influence",
+  "stability",
+  "similarity_boost",
+  "style",
+]);
+
+const BOOLEAN_TARGET_REQUEST_FIELDS = new Set([
+  "include_answer",
+  "include_raw_content",
+  "include_metadata",
+  "return_documents",
+  "strict_filters",
+  "force_instrumental",
+  "respect_sections_durations",
+  "include_image_base64",
+  "timestamps",
+  "loop",
+]);
+
+function parseTargetRequestValue(field: string, value: string): ComboTargetRequestValue {
+  if (BOOLEAN_TARGET_REQUEST_FIELDS.has(field)) return value === "true";
+  if (NUMERIC_TARGET_REQUEST_FIELDS.has(field)) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+  return value;
+}
+
+function compactTargetRequestConfig(
+  config: ComboTargetRequestConfig
+): ComboTargetRequestConfig | undefined {
+  const defaults = Object.fromEntries(
+    Object.entries(config.defaults || {}).filter(([, value]) => value !== "")
+  );
+  const mappings = Object.fromEntries(
+    Object.entries(config.mappings || {}).flatMap(([field, aliases]) => {
+      const compact = Object.fromEntries(
+        Object.entries(aliases).filter(([, value]) => value !== "")
+      );
+      return Object.keys(compact).length > 0 ? [[field, compact]] : [];
+    })
+  );
+  if (Object.keys(defaults).length === 0 && Object.keys(mappings).length === 0) return undefined;
+  return {
+    ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
+    ...(Object.keys(mappings).length > 0 ? { mappings } : {}),
+  };
+}
+
+function ComboTargetRequestConfigEditor({
+  endpoint,
+  entry,
+  onChange,
+}: {
+  endpoint: ComboEndpoint;
+  entry: ComboStep & { requestConfig?: ComboTargetRequestConfig };
+  onChange: (config: ComboTargetRequestConfig | undefined) => void;
+}) {
+  if (entry.kind === "combo-ref" || entry.kind === "provider-wildcard") return null;
+  const fields = COMBO_TARGET_REQUEST_FIELDS[endpoint];
+  if (fields.length === 0) return null;
+  const config = entry.requestConfig || {};
+  const voiceAliases = endpoint === "audio-speech" || endpoint === "audio-generation";
+
+  const updateDefault = (field: string, rawValue: string) => {
+    const defaults = { ...(config.defaults || {}) };
+    if (rawValue === "") delete defaults[field];
+    else defaults[field] = parseTargetRequestValue(field, rawValue);
+    onChange(compactTargetRequestConfig({ ...config, defaults }));
+  };
+
+  const updateMapping = (field: string, alias: string, rawValue: string) => {
+    const mappings = { ...(config.mappings || {}) };
+    const aliases = { ...(mappings[field] || {}) };
+    if (rawValue === "") delete aliases[alias];
+    else aliases[alias] = parseTargetRequestValue(field, rawValue);
+    if (Object.keys(aliases).length > 0) mappings[field] = aliases;
+    else delete mappings[field];
+    onChange(compactTargetRequestConfig({ ...config, mappings }));
+  };
+
+  return (
+    <details
+      className="basis-full mt-1 rounded-md border border-border bg-bg-main/40 px-2 py-1"
+      draggable={false}
+      onDragStart={(event) => event.stopPropagation()}
+    >
+      <summary className="cursor-pointer select-none text-[10px] font-medium text-text-muted">
+        Target request configuration
+      </summary>
+      <p className="mt-1 text-[10px] text-text-muted">
+        Defaults apply only when the API request omits a value. Mappings translate logical values
+        into provider-native values after this target is selected.
+      </p>
+      {voiceAliases && (
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(["default", "male", "female"] as const).map((alias) => (
+            <Input
+              key={alias}
+              label={`Voice · ${alias}`}
+              value={String(config.mappings?.voice?.[alias] ?? "")}
+              placeholder={alias === "default" ? "Provider default voice" : "Provider voice ID"}
+              onChange={(event) => updateMapping("voice", alias, event.target.value)}
+            />
+          ))}
+        </div>
+      )}
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {fields
+          .filter((field) => !(voiceAliases && field === "voice"))
+          .map((field) => (
+            <Input
+              key={field}
+              label={`Default · ${field}`}
+              type={NUMERIC_TARGET_REQUEST_FIELDS.has(field) ? "number" : "text"}
+              value={String(config.defaults?.[field] ?? "")}
+              placeholder="Use request/provider default"
+              onChange={(event) => updateDefault(field, event.target.value)}
+            />
+          ))}
+      </div>
+    </details>
+  );
 }
 
 /**
@@ -3145,6 +3294,21 @@ function ComboFormModal({
     setModels(newModels);
   };
 
+  const handleTargetRequestConfigChange = (
+    index: number,
+    requestConfig: ComboTargetRequestConfig | undefined
+  ) => {
+    setModels(
+      models.map((entry, entryIndex) => {
+        if (entryIndex !== index) return entry;
+        const next = { ...entry };
+        if (requestConfig) next.requestConfig = requestConfig;
+        else delete next.requestConfig;
+        return next;
+      })
+    );
+  };
+
   const handleAutoBalance = () => {
     const count = models.length;
     if (count === 0) return;
@@ -4109,7 +4273,7 @@ function ComboFormModal({
                       onDragEnd={handleDragEnd}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDrop={(e) => handleDrop(e, index)}
-                      className={`group/item flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-all cursor-grab active:cursor-grabbing ${
+                      className={`group/item flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-md transition-all cursor-grab active:cursor-grabbing ${
                         dragOverIndex === index && dragIndex !== index
                           ? "bg-primary/10 border border-primary/30"
                           : "bg-bg-subtle hover:bg-bg-subtle border border-transparent"
@@ -4216,6 +4380,14 @@ function ComboFormModal({
                       >
                         <Icon name="close" size={12} />
                       </Button>
+
+                      <ComboTargetRequestConfigEditor
+                        endpoint={activeEndpoint}
+                        entry={entry as ComboStep & { requestConfig?: ComboTargetRequestConfig }}
+                        onChange={(requestConfig) =>
+                          handleTargetRequestConfigChange(index, requestConfig)
+                        }
+                      />
                     </div>
                   ))}
                 </div>

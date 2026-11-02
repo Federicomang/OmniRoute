@@ -329,9 +329,13 @@ export async function POST(request: Request) {
       policy: scope.policy,
       allowedConnections: scope.allowedConnections,
       settings: await getSettings(),
-      dispatch: (provider, allowedConnections) =>
+      dispatch: (routedBody, provider, allowedConnections) =>
         executeWebFetchBody(
-          { ...body, model: undefined, provider: provider as WebFetchProviderId },
+          {
+            ...routedBody,
+            model: undefined,
+            provider: provider as WebFetchProviderId,
+          } as z.infer<typeof v1WebFetchSchema>,
           allowedConnections
         ),
     });

@@ -24,6 +24,33 @@ export const comboStepMetaSchema = {
   fallbackOnlyOnQuotaExhaustion: z.boolean().optional(),
 };
 
+const comboTargetRequestValueSchema = z.union([
+  z.string().max(10000),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
+
+const comboTargetRequestRecordSchema = z
+  .record(z.string().trim().min(1).max(100), comboTargetRequestValueSchema)
+  .superRefine((value, ctx) => {
+    if (Object.keys(value).length > 50) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "at most 50 request fields are allowed",
+      });
+    }
+  });
+
+export const comboTargetRequestConfigSchema = z
+  .object({
+    defaults: comboTargetRequestRecordSchema.optional(),
+    mappings: z
+      .record(z.string().trim().min(1).max(100), comboTargetRequestRecordSchema)
+      .optional(),
+  })
+  .strict();
+
 export const comboModelStepInputSchema = z.object({
   kind: z.literal("model").optional(),
   provider: z.string().trim().min(1).max(120).optional(),
@@ -37,6 +64,7 @@ export const comboModelStepInputSchema = z.object({
   // step's input, and this `prompt` is injected as that step's system instruction.
   // Ignored by every other strategy, so it is fully backward-compatible.
   prompt: z.string().trim().min(1).max(20000).optional(),
+  requestConfig: comboTargetRequestConfigSchema.optional(),
   ...comboStepMetaSchema,
 });
 

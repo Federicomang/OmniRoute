@@ -25,6 +25,7 @@ import {
 import { getModelTimeoutMs } from "../config/providerModels.ts";
 import { getRegistryEntry } from "../config/providerRegistry.ts";
 import { projectComboForEndpoint } from "../../src/lib/combos/endpointCapabilities.ts";
+import { applyComboTargetRequestConfig } from "./targetRequestConfig.ts";
 
 import { getHiddenModelsByProvider } from "@/models";
 import { getHiddenChatModels } from "../../src/lib/hiddenChatModels";
@@ -841,12 +842,20 @@ async function handleComboChatInner({
   } = phaseComboSetup(comboCtx);
   body = comboCtx.body;
 
+  const handleConfiguredSingleModel: typeof handleSingleModel = (targetBody, modelStr, target) => {
+    const configuredBody =
+      target && "requestConfig" in target
+        ? applyComboTargetRequestConfig(endpointCapability, targetBody, target.requestConfig)
+        : targetBody;
+    return handleSingleModel(configuredBody, modelStr, target);
+  };
+
   // #10681: opaque per-invocation decision trace (safe routing metadata only).
   const traceInvocationId = invocationId ?? createInvocationId();
   startComboTrace(traceInvocationId, { strategy, comboName: combo.name });
 
   const handleSingleModelWithTimeout = buildTargetTimeoutRunner({
-    handleSingleModel,
+    handleSingleModel: handleConfiguredSingleModel,
     comboTargetTimeoutMs,
     resolveTargetTimeoutMs: (target) =>
       resolveTargetTimeoutMsForTarget(

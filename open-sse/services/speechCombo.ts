@@ -41,6 +41,7 @@ import {
 } from "./mediaComboFallback.ts";
 import { projectComboForEndpoint } from "../../src/lib/combos/endpointCapabilities.ts";
 import { orderCapabilityTargets } from "../../src/lib/combos/capabilityTargetOrder.ts";
+import { applyComboTargetRequestConfig } from "./targetRequestConfig.ts";
 
 /**
  * Execute a full combo strategy for a text-to-speech request.
@@ -193,8 +194,9 @@ export async function executeSpeechCombo(
       }
     }
 
+    const targetBody = applyComboTargetRequestConfig("audio-speech", body, target.requestConfig);
     const response = await handleAudioSpeech({
-      body: { ...body, model: target.modelStr },
+      body: { ...targetBody, model: target.modelStr },
       credentials,
       resolvedProvider: providerConfig,
       resolvedModel,

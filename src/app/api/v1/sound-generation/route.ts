@@ -55,10 +55,12 @@ export async function POST(request: Request) {
               )
             );
           }
+          const configuredBody = { ...targetBody };
+          delete configuredBody.model;
           return proxyElevenLabsRequest(
             request,
             "/sound-generation",
-            { method: "POST", body: JSON.stringify({ ...parsed.data, model_id: model }) },
+            { method: "POST", body: JSON.stringify({ ...configuredBody, model_id: model }) },
             {
               model: target,
               contentType: "application/json",
